@@ -35,12 +35,13 @@ public class WeatherhubClient {
 
 		BodyPublisher body = BodyPublishers.ofString("phoneid=" + phoneId);
 		HttpRequest request = HttpRequest.newBuilder(URI.create("https://measurements.mobile-alerts.eu/"))
-				.POST(body)
 				.header("accept", MediaType.TEXT_HTML)
 				.header("accept-encoding", "deflate, br")
 				.header("cache-control", "max-age=0")
 				.header("content-type", MediaType.APPLICATION_FORM_URLENCODED)
+				.header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36")
 				.header("cookie", "PhoneID=" + phoneId)
+				.POST(body)
 				.build();
 		try {
 			HttpResponse<String> response =
