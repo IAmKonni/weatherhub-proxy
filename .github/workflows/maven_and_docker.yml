@@ -1,7 +1,7 @@
 # This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
 # For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
 
-name: Java CI with Maven
+name: Maven and docker build
 
 on:
   push:
@@ -25,4 +25,4 @@ jobs:
     - name: Build with Maven
       run: mvn -B package -Pnative -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true --file pom.xml
     - name: Build the Docker image
-      run: docker build . --file src/main/docker/Dockerfile.native -t iamkonni/weatherhub-proxy --tag weatherhub-proxy:$(date +%s)
+      run: docker build . --file src/main/docker/Dockerfile.native -t iamkonni/weatherhub-proxy --tag iamkonni/weatherhub-proxy:$(date +%s)
