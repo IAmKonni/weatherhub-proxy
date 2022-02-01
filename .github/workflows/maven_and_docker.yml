@@ -24,3 +24,5 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: mvn -B package -Pnative -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true --file pom.xml
+    - name: Build the Docker image
+      run: docker build . --file src/main/docker/Dockerfile.native -t iamkonni/weatherhub-proxy --tag weatherhub-proxy:$(date +%s)
