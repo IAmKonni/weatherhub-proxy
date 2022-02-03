@@ -36,7 +36,7 @@ Just use HTTP GET requests to the following endpoint:
 http(s)://host:8080/sensor/all/<phoneid>
 ```
 
-The <phoneid> can be seen in the WeatherHub / Mobile-Alerts app on your smartphone.
+The `<phoneid>` can be read out in the WeatherHub / Mobile-Alerts app on your smartphone.
   
 The response should look like:
   
