@@ -30,6 +30,6 @@ jobs:
         DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
       run: docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
     - name: Build the Docker image
-      run: docker build . --file src/main/docker/Dockerfile.native -t iamkonni/weatherhub-proxy --tag iamkonni/weatherhub-proxy:$(date +%s)
+      run: docker build . --file src/main/docker/Dockerfile.native-distroless -t iamkonni/weatherhub-proxy --tag iamkonni/weatherhub-proxy:$(date +%s)
     - name: Docker push
       run: docker push ${{secrets.DOCKER_USER}}/weatherhub-proxy
