@@ -37,3 +37,51 @@ http(s)://host:8080/sensor/all/<phoneid>
 ```
 
 The <phoneid> can be seen in the WeatherHub / Mobile-Alerts app on your smartphone.
+  
+The response should look like:
+  
+```application/json
+[
+  {
+    "id": "0305E29CC32E",
+    "label": "Außen",
+    "time": "2022-02-03T23:14:38",
+    "temperature": 3.8,
+    "humidity": 93
+  },
+  {
+    "id": "0320B7FB6650",
+    "label": "Garage",
+    "time": "2022-02-03T21:28:22",
+    "temperature": 5.5,
+    "humidity": 80
+  },
+  {
+    "id": "1236FB3D35A1",
+    "label": "Schlafzimmer",
+    "time": "2022-02-03T23:15:02",
+    "temperature": 22.1,
+    "humidity": 45
+  },
+  {
+    "id": "042167F6D4AB",
+    "label": "Waschküche",
+    "time": "2022-02-03T23:15:39",
+    "temperature": 23.2,
+    "humidity": 41
+  },
+  {
+    "id": "115CCE323FAD",
+    "label": "Wohnen",
+    "time": "2022-02-03T23:19:05",
+    "temperature": 22.3,
+    "humidity": 47,
+    "temperature2": 22.4,
+    "temperature3": 22.6,
+    "temperature4": 20.9,
+    "humidity2": 39,
+    "humidity3": 58,
+    "humidity4": 43
+  }
+]
+```
