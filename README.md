@@ -6,7 +6,7 @@ weatherhub-proxy is a quarkus-based implementation for reading Weatherhub / Mobi
 
 The REST endpoint is exposed on port 8080. There is nothing else to configure.
 
-This is am example docker-compose file that can be used.
+This is an example docker-compose file that can be used.
 
 ```docker-compose.yml
 version: "3.7"
