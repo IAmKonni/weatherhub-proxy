@@ -17,40 +17,67 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 @Singleton
-public class ThermalSensorParser {
+public class SensorParser {
 	
 	@Inject
 	Logger log;
 
 	final String simpleSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Temperatur ([^ ]+) ?C? Luftfeuchte ([^% ]+)%?";
     final String multiSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Temp In ([^ ]+) ?C? Hum In ([^%]+)%? Temp 1 ([^ ]+) ?C? Hum 1 ([^%]+)%? Temp 2 ([^ ]+) ?C? Hum 2 ([^%]+)%? Temp 3 ([^ ]+) ?C? Hum 3 ([^%]+)%?";
+    final String rainSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Regen ([^ ]+) ?mm?";
     
-	public Set<ThermalSensor> parseAllSensorData(String html) {
-		Set<ThermalSensor> resultSet = new LinkedHashSet<>();
+	public Set<Sensor> parseAllSensorData(String html) {
+		Set<Sensor> resultSet = new LinkedHashSet<>();
 
 		Document document = Jsoup.parse(html);
 
 		Elements sensorElements = document.select("div.sensor");
 
 		for (Element sensor : sensorElements) {
-			ThermalSensor tsensor = parseSingleSensorData(sensor.text());
+			Sensor tsensor = parseSingleSensorData(sensor.text());
 			if (tsensor != null && tsensor.getId() != null && !tsensor.getId().isEmpty()) {
 				resultSet.add(tsensor);
 			}
-			log.debug(tsensor.toString());
+			log.debug(tsensor == null ? sensor.text() : tsensor.toString());
 		}
 		return resultSet;
 	}
 
-	public ThermalSensor parseSingleSensorData(String text) {
-		ThermalSensor result = null;
+	public Sensor parseSingleSensorData(String text) {
+		Sensor result = null;
 		result = parseMultiSensorData(text);
 		
 		if (result == null) {
 			result = parseSimpleSensorData(text);
 		}
 		
+		if (result == null) {
+			result = parseRainSensorData(text);
+		}
+		
 		return result;
+	}
+
+	private Sensor parseRainSensorData(String text) {
+		final Pattern pattern = Pattern.compile(rainSensorRegex, Pattern.MULTILINE);
+		final Matcher matcher = pattern.matcher(text);
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+		RainSensor sensor = null;
+
+		while (matcher.find()) {
+			sensor = new RainSensor();
+			sensor.setLabel(matcher.group(1));
+			sensor.setId(matcher.group(2));
+			sensor.setTime(LocalDateTime.parse(matcher.group(3), formatter));
+			try {
+				sensor.setRainfall(Float.parseFloat(matcher.group(4).replace(",", ".")));
+			} catch (NumberFormatException e) {
+				log.error("Sensor liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
+				sensor.setRainfall(0);
+			}
+		}
+		
+		return sensor;
 	}
 
 	private ThermalMultiSensor parseMultiSensorData(String text) {

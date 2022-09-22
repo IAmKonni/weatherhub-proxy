@@ -30,7 +30,7 @@ public class SensorResource {
 	@GET
 	@Path("/all/{phoneId}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Set<ThermalSensor> getSensorDataWithGivenPhoneId(@PathParam String phoneId) {
+	public Set<Sensor> getSensorDataWithGivenPhoneId(@PathParam String phoneId) {
 		return client.getSensorDataWithGivenPhoneId(phoneId);
 	}
 }

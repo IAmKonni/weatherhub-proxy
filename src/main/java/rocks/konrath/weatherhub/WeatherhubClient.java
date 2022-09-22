@@ -22,9 +22,9 @@ public class WeatherhubClient {
 	Logger log;
 	
 	@Inject
-	ThermalSensorParser parser;
+	SensorParser parser;
 
-	public Set<ThermalSensor> getSensorDataWithGivenPhoneId(String phoneId) {
+	public Set<Sensor> getSensorDataWithGivenPhoneId(String phoneId) {
 		String htmlBody = requestData(phoneId);
 		
 		return parser.parseAllSensorData(htmlBody);
