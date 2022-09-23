@@ -2,6 +2,12 @@
 
 weatherhub-proxy is a quarkus-based implementation for reading Weatherhub / Mobile Alerts sensors from the web portal https://measurements.mobile-alerts.eu and exposing them via a REST interface in JSON format.
 
+Supported are up to day:
+
+* simple temperature/humidity sensors
+* temperature/humidity "sensors" with multiple sensors
+* rainfall sensors
+
 ## Installation / Setup
 
 The REST endpoint is exposed on port 8080. There is nothing else to configure.
@@ -45,43 +51,55 @@ The response should look like:
   {
     "id": "0305E29CC32E",
     "label": "Außen",
-    "time": "2022-02-03T23:14:38",
-    "temperature": 3.8,
-    "humidity": 93
+    "time": "2022-09-23T09:24:26",
+    "temperature": 6.5,
+    "humidity": 87,
+    "sensorClass": "rocks.konrath.weatherhub.ThermalSensor"
   },
   {
     "id": "0320B7FB6650",
     "label": "Garage",
-    "time": "2022-02-03T21:28:22",
-    "temperature": 5.5,
-    "humidity": 80
+    "time": "2022-09-23T09:25:53",
+    "temperature": 13.1,
+    "humidity": 64,
+    "sensorClass": "rocks.konrath.weatherhub.ThermalSensor"
+  },
+  {
+    "id": "085148DB8CA0",
+    "label": "Regensensor",
+    "time": "2022-09-22T14:13:16",
+    "rainfall": 0.5,
+    "sensorClass": "rocks.konrath.weatherhub.RainSensor"
   },
   {
     "id": "1236FB3D35A1",
     "label": "Schlafzimmer",
-    "time": "2022-02-03T23:15:02",
-    "temperature": 22.1,
-    "humidity": 45
+    "time": "2022-09-23T09:19:08",
+    "temperature": 21.4,
+    "humidity": 54,
+    "sensorClass": "rocks.konrath.weatherhub.ThermalSensor"
   },
   {
     "id": "042167F6D4AB",
     "label": "Waschküche",
-    "time": "2022-02-03T23:15:39",
-    "temperature": 23.2,
-    "humidity": 41
+    "time": "2022-09-23T09:22:06",
+    "temperature": 23.4,
+    "humidity": 52,
+    "sensorClass": "rocks.konrath.weatherhub.ThermalSensor"
   },
   {
     "id": "115CCE323FAD",
     "label": "Wohnen",
-    "time": "2022-02-03T23:19:05",
-    "temperature": 22.3,
-    "humidity": 47,
-    "temperature2": 22.4,
-    "temperature3": 22.6,
-    "temperature4": 20.9,
-    "humidity2": 39,
-    "humidity3": 58,
-    "humidity4": 43
+    "time": "2022-09-23T09:23:45",
+    "temperature": 22.8,
+    "humidity": 60,
+    "temperature2": 23.1,
+    "temperature3": 22.7,
+    "temperature4": 21.7,
+    "humidity2": 46,
+    "humidity3": 59,
+    "humidity4": 49,
+    "sensorClass": "rocks.konrath.weatherhub.ThermalMultiSensor"
   }
 ]
 ```
