@@ -31,7 +31,7 @@ services:
 You can use this shell/cli command as well
 
 ```shell
-docker run -d --name weatherhub-proxy --restart unless-stopped -p 8088:8088 iamkonni/weatherhub-proxy:latest
+docker run -d --name weatherhub-proxy --restart unless-stopped -p 8080:8080 iamkonni/weatherhub-proxy:latest
 ```
 
 ## Querying the sensor data
