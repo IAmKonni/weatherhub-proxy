@@ -26,6 +26,8 @@ public class SensorParser {
     final String multiSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Temp In ([^ ]+) ?C? Hum In ([^%]+)%? Temp 1 ([^ ]+) ?C? Hum 1 ([^%]+)%? Temp 2 ([^ ]+) ?C? Hum 2 ([^%]+)%? Temp 3 ([^ ]+) ?C? Hum 3 ([^%]+)%?";
     final String rainSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Regen ([^ ]+) ?mm?";
     
+    final String valueUnitRegex = "([0-9,]+) ?(.*)";
+    
 	public Set<Sensor> parseAllSensorData(String html) {
 		Set<Sensor> resultSet = new LinkedHashSet<>();
 
@@ -154,6 +156,68 @@ public class SensorParser {
 		
 		return sensor;
 	}
+
+	public SensorHistory parseSensorHistoryData(String htmlBody) {
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+		log.info(htmlBody);
+		
+		Document document = Jsoup.parse(htmlBody);
+
+		Elements headCaptions = document.select("table.table-striped thead tr");
+		Elements valueRows = document.select("table.table-striped tbody tr");
+		
+		SensorHistory history = new SensorHistory();
+		history.setId("testId");
+		history.setLabel("label");
+		
+		for (Element head : headCaptions) {
+			//Elements tsElement = head.select("th.timestamp");
+			Elements measurementElements = head.select("th.measurement");
+			for (Element measurement : measurementElements) {
+				SensorDataPointStream dpStream = new SensorDataPointStream();
+				dpStream.setName(measurement.text());
+				history.getDataPointStreams().add(dpStream);
+			}
+		}
+
+		for (Element row : valueRows) {
+			
+			Elements tsElement = row.select("td.timestamp");
+			Elements measurementElements = row.select("td.measurement");
+
+			for (int i = 0; i < measurementElements.size(); i++) {
+				SensorDataPoint dp = new SensorDataPoint();
+				dp.setTime(LocalDateTime.parse(tsElement.text(), formatter));
+				dp.setValue(Float.parseFloat(getValueString(measurementElements.get(i).text()).replace(",", ".")));
+				history.getDataPointStreams().get(i).getValues().add(dp);
+				
+				//set unit
+				if (history.getDataPointStreams().get(i).getUnit().isBlank()) {
+					history.getDataPointStreams().get(i).setUnit(getUnitString(measurementElements.get(i).text()));
+				}
+			}
+		}
+		return history;
+	}	
 	
+	private String getValueString(String input) {
+		final Pattern pattern = Pattern.compile(valueUnitRegex, Pattern.MULTILINE);
+		final Matcher matcher = pattern.matcher(input);
+		
+		while (matcher.find()) {
+			return matcher.group(1);
+		}
+		return "";
+	}
+	
+	private String getUnitString(String input) {
+		final Pattern pattern = Pattern.compile(valueUnitRegex, Pattern.MULTILINE);
+		final Matcher matcher = pattern.matcher(input);
+		
+		while (matcher.find()) {
+			return matcher.group(2);
+		}
+		return "";
+	}
 	
 }

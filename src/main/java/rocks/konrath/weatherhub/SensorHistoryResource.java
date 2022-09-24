@@ -1,7 +1,5 @@
 package rocks.konrath.weatherhub;
 
-import java.util.Set;
-
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -11,8 +9,8 @@ import javax.ws.rs.core.MediaType;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.annotations.jaxrs.PathParam;
 
-@Path("/sensor")
-public class SensorResource {
+@Path("/sensorHistory")
+public class SensorHistoryResource {
 
 	@Inject
 	Logger log;
@@ -21,9 +19,10 @@ public class SensorResource {
 	WeatherhubClient client;
 	
 	@GET
-	@Path("/all/{phoneId}")
+	@Path("/{phoneId}/{sensorId}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Set<Sensor> getSensorDataWithGivenPhoneId(@PathParam String phoneId) {
-		return client.getSensorDataWithGivenPhoneId(phoneId);
+	public SensorHistory getSensorHistoryDataWithGivenPhoneIdAndSensorId(@PathParam String phoneId, @PathParam String sensorId) {
+		return client.getSensorHistoryDataWithGivenPhoneIdAndSensorId(phoneId, sensorId);
 	}
+
 }
