@@ -159,7 +159,6 @@ public class SensorParser {
 
 	public SensorHistory parseSensorHistoryData(String htmlBody) {
 		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-		log.info(htmlBody);
 		
 		Document document = Jsoup.parse(htmlBody);
 
