@@ -95,8 +95,11 @@ public class WeatherhubClient {
 
 	public SensorHistory getSensorHistoryDataWithGivenPhoneIdAndSensorId(String phoneId, String sensorId) {
         String htmlBody = requestSensorDataFromHistoryPage(phoneId, sensorId);
+        
+        SensorHistory history = new SensorHistory();
+		history.setId(sensorId);
 		
-		return parser.parseSensorHistoryData(htmlBody);
+		return parser.parseSensorHistoryData(htmlBody, history);
 	}
 	
 	private Date getEndOfDay() {
