@@ -1,6 +1,6 @@
 package rocks.konrath.weatherhub;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 public class SensorDataPointStream {
@@ -8,7 +8,7 @@ public class SensorDataPointStream {
 	String name = "";
 	String unit = "";
 	
-	List<SensorDataPoint> values = new LinkedList<>();
+	List<SensorDataPoint> values = new ArrayList<>();
 
 	public String getName() {
 		return name;
