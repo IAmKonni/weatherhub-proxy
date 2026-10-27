@@ -20,14 +20,13 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
           cache: maven
 
       - name: Set up GraalVM native-image
         uses: graalvm/setup-graalvm@v1
         with:
           distribution: 'graalvm'
-          java-version: '17'
           version: '25.4'
           components: 'native-image'
 
