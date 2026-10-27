@@ -16,15 +16,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Make Maven wrapper executable
-        run: chmod +x ./mvnw
-
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
           cache: maven
+
+      - name: Set up GraalVM native-image
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '17'
+          distribution: 'graalvm'
+          components: 'native-image'
+
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
 
       - name: Build native Quarkus application
         run: ./mvnw -B package -Pnative -DskipTests
