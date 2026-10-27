@@ -25,11 +25,13 @@ jobs:
     - name: Build with Maven
       run: mvn -B package -Pnative -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true --file pom.xml
     - name: docker login
+      if: ${{ github.event_name == 'push' && secrets.DOCKER_USER != '' && secrets.DOCKER_PASSWORD != '' }}
       env:
-        DOCKER_USER: ${{secrets.DOCKER_USER}}
-        DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
-      run: docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
     - name: Build the Docker image
       run: docker build . --file src/main/docker/Dockerfile.native-distroless -t iamkonni/weatherhub-proxy --tag iamkonni/weatherhub-proxy:$(date +%s)
     - name: Docker push
-      run: docker push ${{secrets.DOCKER_USER}}/weatherhub-proxy
+      if: ${{ github.event_name == 'push' && secrets.DOCKER_USER != '' && secrets.DOCKER_PASSWORD != '' }}
+      run: docker push ${{ secrets.DOCKER_USER }}/weatherhub-proxy
