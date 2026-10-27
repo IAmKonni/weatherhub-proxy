@@ -28,6 +28,7 @@ jobs:
         with:
           distribution: 'graalvm'
           java-version: '17'
+          version: '17.0.12'
           components: 'native-image'
 
       - name: Make Maven wrapper executable
