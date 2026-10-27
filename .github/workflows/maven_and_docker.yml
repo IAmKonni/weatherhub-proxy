@@ -23,13 +23,6 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Set up GraalVM native-image
-        uses: graalvm/setup-graalvm@v1
-        with:
-          distribution: 'graalvm'
-          version: '25.4'
-          components: 'native-image'
-
       - name: Make Maven wrapper executable
         run: chmod +x ./mvnw
 
