@@ -26,8 +26,8 @@ jobs:
       - name: Set up GraalVM native-image
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17.0.12'
           distribution: 'graalvm'
+          java-version: '17'
           components: 'native-image'
 
       - name: Make Maven wrapper executable
