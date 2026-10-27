@@ -13,9 +13,9 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.Set;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.ws.rs.core.MediaType;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import jakarta.ws.rs.core.MediaType;
 
 import org.jboss.logging.Logger;
 
@@ -32,7 +32,6 @@ public class WeatherhubClient {
 
 	public Set<Sensor> getSensorDataWithGivenPhoneId(String phoneId) {
 		String htmlBody = requestSensorDataFromOverviewPage(phoneId);
-		
 		return parser.parseAllSensorData(htmlBody);
 	}
 
@@ -50,12 +49,11 @@ public class WeatherhubClient {
 				.POST(body)
 				.build();
 		try {
-			HttpResponse<String> response =
-			  client.send(request, BodyHandlers.ofString());
+			HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
 			return response.body();
 		} catch (Exception e) {
 			log.error(e);
-			return "";			
+			return "";
 		}
 	}
 	
@@ -73,7 +71,8 @@ public class WeatherhubClient {
 		String formattedDateFrom = sdf.format(timestampFiveDaysAgo);
 		String formattedDateTo = sdf.format(endOfToday);
 		
-		BodyPublisher body = BodyPublishers.ofString("deviceid=" + sensorId +  "&vendorid=1af98e8c-2265-4887-b211-3c04623d27c7&appbundle=eu.mobile_alerts.weatherhub&fromepoch=" + timestampFiveDaysAgoInSeconds + "&toepoch=" + timestampNowInSeconds + "&from=" + formattedDateFrom + "+00%3A00&to=" + formattedDateTo + "+00%3A00&area=week");
+		BodyPublisher body = BodyPublishers.ofString(
+				"deviceid=" + sensorId + "&vendorid=1af98e8c-2265-4887-b211-3c04623d27c7&appbundle=eu.mobile_alerts.weatherhub&fromepoch=" + timestampFiveDaysAgoInSeconds + "&toepoch=" + timestampNowInSeconds + "&from=" + formattedDateFrom + "+00%3A00&to=" + formattedDateTo + "+00%3A00&area=week");
 		HttpRequest request = HttpRequest.newBuilder(URI.create("https://measurements.mobile-alerts.eu/Home/MeasurementDetails"))
 				.header("accept", MediaType.TEXT_HTML)
 				.header("accept-encoding", "deflate, br")
@@ -84,31 +83,28 @@ public class WeatherhubClient {
 				.POST(body)
 				.build();
 		try {
-			HttpResponse<String> response =
-			  client.send(request, BodyHandlers.ofString());
+			HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
 			return response.body();
 		} catch (Exception e) {
 			log.error(e);
-			return "";			
+			return "";
 		}
 	}
 
 	public SensorHistory getSensorHistoryDataWithGivenPhoneIdAndSensorId(String phoneId, String sensorId) {
-        String htmlBody = requestSensorDataFromHistoryPage(phoneId, sensorId);
-        
-        SensorHistory history = new SensorHistory();
+		String htmlBody = requestSensorDataFromHistoryPage(phoneId, sensorId);
+		SensorHistory history = new SensorHistory();
 		history.setId(sensorId);
-		
 		return parser.parseSensorHistoryData(htmlBody, history);
 	}
 	
 	private Date getEndOfDay() {
-	    Calendar calendar = Calendar.getInstance();
-	    int year = calendar.get(Calendar.YEAR);
-	    int month = calendar.get(Calendar.MONTH);
-	    int day = calendar.get(Calendar.DATE);
-	    calendar.set(year, month, day, 23, 59, 59);
-	    calendar.add(Calendar.SECOND, +1);
-	    return calendar.getTime();
+		Calendar calendar = Calendar.getInstance();
+		int year = calendar.get(Calendar.YEAR);
+		int month = calendar.get(Calendar.MONTH);
+		int day = calendar.get(Calendar.DATE);
+		calendar.set(year, month, day, 23, 59, 59);
+		calendar.add(Calendar.SECOND, +1);
+		return calendar.getTime();
 	}
 }

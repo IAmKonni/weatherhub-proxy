@@ -7,8 +7,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 
 import org.jboss.logging.Logger;
 import org.jsoup.Jsoup;
@@ -191,7 +191,6 @@ public class SensorParser {
 				dp.setValue(Float.parseFloat(getValueString(measurementElements.get(i).text()).replace(",", ".")));
 				history.getDataPointStreams().get(i).getValues().add(dp);
 				
-				//set unit
 				if (history.getDataPointStreams().get(i).getUnit().isBlank()) {
 					history.getDataPointStreams().get(i).setUnit(getUnitString(measurementElements.get(i).text()));
 				}
