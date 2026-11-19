@@ -2,13 +2,15 @@ package rocks.konrath.weatherhub;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import org.jboss.logging.Logger;
 import org.jsoup.Jsoup;
@@ -16,217 +18,184 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-@Singleton
+/**
+ * Parses the HTML pages of measurements.mobile-alerts.eu into sensor objects.
+ * Stateless and thread-safe.
+ */
+@ApplicationScoped
 public class SensorParser {
-	
-	@Inject
-	Logger log;
 
-	final String simpleSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Temperatur ([^ ]+) ?C? Luftfeuchte ([^% ]+)%?";
-    final String multiSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Temp In ([^ ]+) ?C? Hum In ([^%]+)%? Temp 1 ([^ ]+) ?C? Hum 1 ([^%]+)%? Temp 2 ([^ ]+) ?C? Hum 2 ([^%]+)%? Temp 3 ([^ ]+) ?C? Hum 3 ([^%]+)%?";
-    final String rainSensorRegex = "([^ ]+) ID ([^ ]+) Zeitpunkt (.*) Regen ([^ ]+) ?mm?";
-    
-    final String titleRegex = "([^ ]+) Messungen";
-    final String valueUnitRegex = "([0-9,]+) ?(.*)";
-    
+	private static final Logger LOG = Logger.getLogger(SensorParser.class);
+
+	static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+
+	/** Common prefix of every sensor tile: label, id and timestamp. */
+	private static final String HEADER = "(\\S+) ID (\\S+) Zeitpunkt (.+?) ";
+	private static final String TEMPERATURE = "(\\S+) ?°?C?";
+	private static final String HUMIDITY = "([^\\s%]+)%?";
+
+	private static final Pattern MULTI_SENSOR = Pattern.compile(HEADER
+			+ "Temp In " + TEMPERATURE + " Hum In " + HUMIDITY
+			+ " Temp 1 " + TEMPERATURE + " Hum 1 " + HUMIDITY
+			+ " Temp 2 " + TEMPERATURE + " Hum 2 " + HUMIDITY
+			+ " Temp 3 " + TEMPERATURE + " Hum 3 " + HUMIDITY);
+	private static final Pattern THERMAL_SENSOR = Pattern.compile(HEADER
+			+ "Temperatur " + TEMPERATURE + " Luftfeuchte " + HUMIDITY);
+	private static final Pattern RAIN_SENSOR = Pattern.compile(HEADER
+			+ "Regen (\\S+) ?(?:mm)?");
+
+	private static final Pattern HISTORY_TITLE = Pattern.compile("(\\S+) Messungen");
+	private static final Pattern VALUE_WITH_UNIT = Pattern.compile("(-?\\d+(?:[.,]\\d+)?) ?(.*)");
+
+	/**
+	 * Parses all sensor tiles ({@code div.sensor}) of the overview page.
+	 */
 	public Set<Sensor> parseAllSensorData(String html) {
-		Set<Sensor> resultSet = new LinkedHashSet<>();
-
+		Set<Sensor> result = new LinkedHashSet<>();
 		Document document = Jsoup.parse(html);
 
-		Elements sensorElements = document.select("div.sensor");
-
-		for (Element sensor : sensorElements) {
-			Sensor tsensor = parseSingleSensorData(sensor.text());
-			if (tsensor != null && tsensor.getId() != null && !tsensor.getId().isEmpty()) {
-				resultSet.add(tsensor);
+		for (Element tile : document.select("div.sensor")) {
+			String text = tile.text();
+			Optional<Sensor> sensor = parseSingleSensorData(text);
+			if (sensor.isPresent() && !sensor.get().getId().isBlank()) {
+				result.add(sensor.get());
+				LOG.debug(sensor.get());
+			} else {
+				LOG.debugf("Unsupported sensor tile: %s", text);
 			}
-			log.debug(tsensor == null ? sensor.text() : tsensor.toString());
 		}
-		return resultSet;
-	}
-
-	public Sensor parseSingleSensorData(String text) {
-		Sensor result = null;
-		result = parseMultiSensorData(text);
-		
-		if (result == null) {
-			result = parseSimpleSensorData(text);
-		}
-		
-		if (result == null) {
-			result = parseRainSensorData(text);
-		}
-		
 		return result;
 	}
 
-	private Sensor parseRainSensorData(String text) {
-		final Pattern pattern = Pattern.compile(rainSensorRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(text);
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-		RainSensor sensor = null;
-
-		while (matcher.find()) {
-			sensor = new RainSensor();
-			sensor.setLabel(matcher.group(1));
-			sensor.setId(matcher.group(2));
-			sensor.setTime(LocalDateTime.parse(matcher.group(3), formatter));
-			try {
-				sensor.setRainfall(Float.parseFloat(matcher.group(4).replace(",", ".")));
-			} catch (NumberFormatException e) {
-				log.error("Sensor liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setRainfall(0);
-			}
-		}
-		
-		return sensor;
+	/**
+	 * Parses the plain text of a single sensor tile.
+	 */
+	public Optional<Sensor> parseSingleSensorData(String text) {
+		return parseMultiSensor(text)
+				.or(() -> parseThermalSensor(text))
+				.or(() -> parseRainSensor(text));
 	}
 
-	private ThermalMultiSensor parseMultiSensorData(String text) {
-		final Pattern pattern = Pattern.compile(multiSensorRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(text);
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-		ThermalMultiSensor sensor = null;
-
-		while (matcher.find()) {
-			sensor = new ThermalMultiSensor();
-			sensor.setLabel(matcher.group(1));
-			sensor.setId(matcher.group(2));
-			sensor.setTime(LocalDateTime.parse(matcher.group(3), formatter));
-			try {
-				sensor.setTemperature(Float.parseFloat(matcher.group(4).replace(",", ".")));
-				sensor.setHumidity(Integer.parseInt(matcher.group(5)));
-			} catch (NumberFormatException e) {
-				log.warn("Sensor (1) liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setTemperature(0);
-				sensor.setHumidity(0);
-			}
-			
-			try {
-				sensor.setTemperature2(Float.parseFloat(matcher.group(6).replace(",", ".")));
-				sensor.setHumidity2(Integer.parseInt(matcher.group(7)));
-			} catch (NumberFormatException e) {
-				log.warn("Sensor (2) liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setTemperature2(0);
-				sensor.setHumidity2(0);
-			}
-			
-			try {
-				sensor.setTemperature3(Float.parseFloat(matcher.group(8).replace(",", ".")));
-				sensor.setHumidity3(Integer.parseInt(matcher.group(9)));
-			} catch (NumberFormatException e) {
-				log.warn("Sensor (3) liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setTemperature3(0);
-				sensor.setHumidity3(0);
-			}
-			
-			try {
-				sensor.setTemperature4(Float.parseFloat(matcher.group(10).replace(",", ".")));
-				sensor.setHumidity4(Integer.parseInt(matcher.group(11)));
-			} catch (NumberFormatException e) {
-				log.warn("Sensor (4) liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setTemperature4(0);
-				sensor.setHumidity4(0);
-			}
+	private Optional<Sensor> parseMultiSensor(String text) {
+		Matcher m = MULTI_SENSOR.matcher(text);
+		if (!m.find()) {
+			return Optional.empty();
 		}
-		
-		return sensor;
+		ThermalMultiSensor sensor = new ThermalMultiSensor();
+		if (!fillHeader(sensor, m)) {
+			return Optional.empty();
+		}
+		for (int channel = 1; channel <= 4; channel++) {
+			int group = 2 + channel * 2;
+			sensor.setChannel(channel,
+					parseFloat(m.group(group), sensor, "temperature " + channel),
+					parseInt(m.group(group + 1), sensor, "humidity " + channel));
+		}
+		return Optional.of(sensor);
 	}
 
-	private ThermalSensor parseSimpleSensorData(String text) {
-		final Pattern pattern = Pattern.compile(simpleSensorRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(text);
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-		ThermalSensor sensor = null;
-
-		while (matcher.find()) {
-			sensor = new ThermalSensor();
-			sensor.setLabel(matcher.group(1));
-			sensor.setId(matcher.group(2));
-			sensor.setTime(LocalDateTime.parse(matcher.group(3), formatter));
-			try {
-				sensor.setTemperature(Float.parseFloat(matcher.group(4).replace(",", ".")));
-				sensor.setHumidity(Integer.parseInt(matcher.group(5)));
-			} catch (NumberFormatException e) {
-				log.error("Sensor liefert keine Daten: " + sensor.getId() + ", " + sensor.getLabel(), e);
-				sensor.setTemperature(0);
-				sensor.setHumidity(0);
-			}
+	private Optional<Sensor> parseThermalSensor(String text) {
+		Matcher m = THERMAL_SENSOR.matcher(text);
+		if (!m.find()) {
+			return Optional.empty();
 		}
-		
-		return sensor;
+		ThermalSensor sensor = new ThermalSensor();
+		if (!fillHeader(sensor, m)) {
+			return Optional.empty();
+		}
+		sensor.setTemperature(parseFloat(m.group(4), sensor, "temperature"));
+		sensor.setHumidity(parseInt(m.group(5), sensor, "humidity"));
+		return Optional.of(sensor);
 	}
 
-	public SensorHistory parseSensorHistoryData(String htmlBody, SensorHistory history) {
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-		
-		Document document = Jsoup.parse(htmlBody);
+	private Optional<Sensor> parseRainSensor(String text) {
+		Matcher m = RAIN_SENSOR.matcher(text);
+		if (!m.find()) {
+			return Optional.empty();
+		}
+		RainSensor sensor = new RainSensor();
+		if (!fillHeader(sensor, m)) {
+			return Optional.empty();
+		}
+		sensor.setRainfall(parseFloat(m.group(4), sensor, "rainfall"));
+		return Optional.of(sensor);
+	}
 
-		Elements title = document.select("h3");
-		
-		history.setLabel(getSensorTitle(title.text()));
-		
-		Elements headCaptions = document.select("table.table-striped thead tr");
-		
-		for (Element head : headCaptions) {
-			Elements measurementElements = head.select("th.measurement");
-			for (Element measurement : measurementElements) {
-				SensorDataPointStream dpStream = new SensorDataPointStream();
-				dpStream.setName(measurement.text());
-				history.getDataPointStreams().add(dpStream);
-			}
+	private static boolean fillHeader(Sensor sensor, Matcher m) {
+		sensor.setLabel(m.group(1));
+		sensor.setId(m.group(2));
+		try {
+			sensor.setTime(LocalDateTime.parse(m.group(3), TIMESTAMP_FORMAT));
+			return true;
+		} catch (DateTimeParseException e) {
+			LOG.warnf("Sensor %s (%s) has an unparsable timestamp: %s", sensor.getId(), sensor.getLabel(), m.group(3));
+			return false;
+		}
+	}
+
+	/** Parses a German decimal number; sensors without data ("---") yield 0. */
+	private static float parseFloat(String raw, Sensor sensor, String what) {
+		try {
+			return Float.parseFloat(raw.replace(',', '.'));
+		} catch (NumberFormatException e) {
+			LOG.warnf("Sensor %s (%s) delivers no %s: %s", sensor.getId(), sensor.getLabel(), what, raw);
+			return 0;
+		}
+	}
+
+	private static int parseInt(String raw, Sensor sensor, String what) {
+		try {
+			return Integer.parseInt(raw);
+		} catch (NumberFormatException e) {
+			LOG.warnf("Sensor %s (%s) delivers no %s: %s", sensor.getId(), sensor.getLabel(), what, raw);
+			return 0;
+		}
+	}
+
+	/**
+	 * Parses the measurement detail page ({@code /Home/MeasurementDetails}) into the given history.
+	 */
+	public SensorHistory parseSensorHistoryData(String html, SensorHistory history) {
+		Document document = Jsoup.parse(html);
+
+		history.setLabel(firstGroup(HISTORY_TITLE, document.select("h3").text()).orElse(""));
+
+		List<SensorDataPointStream> streams = history.getDataPointStreams();
+		for (Element caption : document.select("table.table-striped thead tr th.measurement")) {
+			streams.add(new SensorDataPointStream(caption.text()));
 		}
 
-		Elements valueRows = document.select("table.table-striped tbody tr");
-		
-		for (Element row : valueRows) {
-			
-			Elements tsElement = row.select("td.timestamp");
-			Elements measurementElements = row.select("td.measurement");
+		for (Element row : document.select("table.table-striped tbody tr")) {
+			LocalDateTime time;
+			try {
+				time = LocalDateTime.parse(row.select("td.timestamp").text(), TIMESTAMP_FORMAT);
+			} catch (DateTimeParseException e) {
+				LOG.debugf("Skipping history row without valid timestamp: %s", row.text());
+				continue;
+			}
 
-			for (int i = 0; i < measurementElements.size(); i++) {
-				SensorDataPoint dp = new SensorDataPoint();
-				dp.setTime(LocalDateTime.parse(tsElement.text(), formatter));
-				dp.setValue(Float.parseFloat(getValueString(measurementElements.get(i).text()).replace(",", ".")));
-				history.getDataPointStreams().get(i).getValues().add(dp);
-				
-				if (history.getDataPointStreams().get(i).getUnit().isBlank()) {
-					history.getDataPointStreams().get(i).setUnit(getUnitString(measurementElements.get(i).text()));
-				}
+			Elements cells = row.select("td.measurement");
+			for (int i = 0; i < cells.size() && i < streams.size(); i++) {
+				addDataPoint(streams.get(i), time, cells.get(i).text());
 			}
 		}
 		return history;
-	}	
-	
-	private String getSensorTitle(String input) {
-		final Pattern pattern = Pattern.compile(titleRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(input);
-		
-		while (matcher.find()) {
-			return matcher.group(1);
-		}
-		return "";
 	}
-	
-	private String getValueString(String input) {
-		final Pattern pattern = Pattern.compile(valueUnitRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(input);
-		
-		while (matcher.find()) {
-			return matcher.group(1);
+
+	private static void addDataPoint(SensorDataPointStream stream, LocalDateTime time, String cellText) {
+		Matcher m = VALUE_WITH_UNIT.matcher(cellText.trim());
+		if (!m.matches()) {
+			LOG.debugf("Skipping unparsable value '%s' of %s", cellText, stream.getName());
+			return;
 		}
-		return "";
-	}
-	
-	private String getUnitString(String input) {
-		final Pattern pattern = Pattern.compile(valueUnitRegex, Pattern.MULTILINE);
-		final Matcher matcher = pattern.matcher(input);
-		
-		while (matcher.find()) {
-			return matcher.group(2);
+		stream.getValues().add(new SensorDataPoint(time, Float.parseFloat(m.group(1).replace(',', '.'))));
+		if (stream.getUnit().isBlank()) {
+			stream.setUnit(m.group(2).trim());
 		}
-		return "";
 	}
-	
+
+	private static Optional<String> firstGroup(Pattern pattern, String input) {
+		Matcher m = pattern.matcher(input);
+		return m.find() ? Optional.of(m.group(1)) : Optional.empty();
+	}
 }
