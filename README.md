@@ -1,8 +1,10 @@
 # weatherhub-proxy
 
-weatherhub-proxy is a quarkus-based implementation for reading Weatherhub / Mobile Alerts sensors from the web portal https://measurements.mobile-alerts.eu and exposing them via a REST interface in JSON format.
+[![Maven and Docker build](https://github.com/IAmKonni/weatherhub-proxy/actions/workflows/maven_and_docker.yml/badge.svg)](https://github.com/IAmKonni/weatherhub-proxy/actions/workflows/maven_and_docker.yml)
 
-Supported are up to day:
+weatherhub-proxy is a Quarkus-based implementation for reading Weatherhub / Mobile Alerts sensors from the web portal https://measurements.mobile-alerts.eu and exposing them via a REST interface in JSON format.
+
+Supported sensors:
 
 * simple temperature/humidity sensors
 * temperature/humidity "sensors" with multiple sensors
@@ -12,11 +14,19 @@ Supported are up to day:
 
 The REST endpoint is exposed on port 8080. There is nothing else to configure.
 
+Optional environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEATHERHUB_BASE_URL` | `https://measurements.mobile-alerts.eu/` | URL of the Mobile Alerts web portal |
+| `WEATHERHUB_TIMEOUT` | `PT15S` | Timeout for requests to the portal (ISO-8601 duration) |
+| `QUARKUS_LOG_CATEGORY__ROCKS_KONRATH__LEVEL` | `INFO` | Set to `DEBUG` to log requests and parser details |
+
+Health and metrics endpoints: `/q/health`, `/q/health/live`, `/q/health/ready`, `/q/metrics`.
+
 This is an example docker-compose file that can be used.
 
 ```docker-compose.yml
-version: "3.7"
-
 services:
   weatherhub-proxy:
     image: iamkonni/weatherhub-proxy:latest
@@ -103,3 +113,47 @@ The response should look like:
   }
 ]
 ```
+
+Phone and sensor IDs must be alphanumeric; anything else is rejected with HTTP 400.
+If the portal cannot be reached, an empty result is returned.
+
+## Querying the history of a single sensor
+
+```endpoint
+http(s)://host:8080/sensorHistory/<phoneid>/<sensorid>
+```
+
+Returns the measurements of the last five days, grouped by measurement:
+
+```application/json
+{
+  "id": "0305E29CC32E",
+  "label": "Außen",
+  "dataPointStreams": [
+    {
+      "name": "Temperatur",
+      "unit": "C",
+      "values": [
+        { "time": "2022-09-23T09:24:26", "value": 6.5 }
+      ]
+    }
+  ]
+}
+```
+
+## Building
+
+Requirements: Java 21 and Docker. Maven is provided via the wrapper.
+
+```shell
+# run tests and build the JVM application
+./mvnw verify
+
+# build the native executable inside a container (no local GraalVM needed)
+./mvnw package -Dnative -Dquarkus.native.container-build=true
+docker build -f src/main/docker/Dockerfile.native-distroless -t weatherhub-proxy .
+```
+
+The GitHub Action runs the tests on every push and pull request, builds the native image
+and pushes it to Docker Hub on pushes to `master`. It needs the repository secrets
+`DOCKER_USER` and `DOCKER_PASSWORD` (a Docker Hub access token).

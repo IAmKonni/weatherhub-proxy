@@ -1,110 +1,119 @@
 package rocks.konrath.weatherhub;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
-import java.net.http.HttpRequest.BodyPublisher;
-import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
-import java.sql.Timestamp;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
-import jakarta.ws.rs.core.MediaType;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-@Singleton
+/**
+ * Fetches the raw HTML pages from the Mobile Alerts web portal.
+ * <p>
+ * Network or HTTP errors are logged and result in an empty page, so the REST API keeps
+ * answering with an empty result instead of an error (unchanged API behaviour).
+ */
+@ApplicationScoped
 public class WeatherhubClient {
-	
-	@Inject
-	Logger log;
-	
-	@Inject
-	SensorParser parser;
-	
-	static final SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy");
 
-	public Set<Sensor> getSensorDataWithGivenPhoneId(String phoneId) {
-		String htmlBody = requestSensorDataFromOverviewPage(phoneId);
-		return parser.parseAllSensorData(htmlBody);
+	private static final Logger LOG = Logger.getLogger(WeatherhubClient.class);
+
+	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+	private static final String VENDOR_ID = "1af98e8c-2265-4887-b211-3c04623d27c7";
+	private static final String APP_BUNDLE = "eu.mobile_alerts.weatherhub";
+	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+	private static final int HISTORY_DAYS = 5;
+
+	@ConfigProperty(name = "weatherhub.base-url", defaultValue = "https://measurements.mobile-alerts.eu/")
+	URI baseUrl;
+
+	@ConfigProperty(name = "weatherhub.timeout", defaultValue = "PT15S")
+	Duration timeout;
+
+	Clock clock = Clock.systemDefaultZone();
+
+	private HttpClient httpClient;
+
+	@PostConstruct
+	void init() {
+		httpClient = HttpClient.newBuilder()
+				.connectTimeout(timeout)
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build();
 	}
 
-	private String requestSensorDataFromOverviewPage(String phoneId) {
-		HttpClient client = HttpClient.newHttpClient();
+	/** HTML of the overview page listing all sensors of the given phone id. */
+	public String fetchOverviewPage(String phoneId) {
+		return post(baseUrl, phoneId, Map.of("phoneid", phoneId));
+	}
 
-		BodyPublisher body = BodyPublishers.ofString("phoneid=" + phoneId);
-		HttpRequest request = HttpRequest.newBuilder(URI.create("https://measurements.mobile-alerts.eu/"))
-				.header("accept", MediaType.TEXT_HTML)
-				.header("accept-encoding", "deflate, br")
-				.header("cache-control", "max-age=0")
-				.header("content-type", MediaType.APPLICATION_FORM_URLENCODED)
-				.header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36")
-				.header("cookie", "PhoneID=" + phoneId)
-				.POST(body)
+	/** HTML of the measurement detail page of one sensor, covering the last days. */
+	public String fetchHistoryPage(String phoneId, String sensorId) {
+		ZonedDateTime to = LocalDate.now(clock).plusDays(1).atStartOfDay(clock.getZone());
+		ZonedDateTime from = to.minusDays(HISTORY_DAYS);
+
+		Map<String, String> form = new LinkedHashMap<>();
+		form.put("deviceid", sensorId);
+		form.put("vendorid", VENDOR_ID);
+		form.put("appbundle", APP_BUNDLE);
+		form.put("fromepoch", String.valueOf(from.toEpochSecond()));
+		form.put("toepoch", String.valueOf(to.toEpochSecond()));
+		form.put("from", DATE_FORMAT.format(from) + " 00:00");
+		form.put("to", DATE_FORMAT.format(to) + " 00:00");
+		form.put("area", "week");
+
+		return post(baseUrl.resolve("Home/MeasurementDetails"), phoneId, form);
+	}
+
+	private String post(URI uri, String phoneId, Map<String, String> form) {
+		HttpRequest request = HttpRequest.newBuilder(uri)
+				.timeout(timeout)
+				.header("Accept", "text/html")
+				.header("Cache-Control", "max-age=0")
+				.header("Content-Type", "application/x-www-form-urlencoded")
+				.header("User-Agent", USER_AGENT)
+				.header("Cookie", "PhoneID=" + encode(phoneId))
+				.POST(HttpRequest.BodyPublishers.ofString(formEncode(form)))
 				.build();
 		try {
-			HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			if (response.statusCode() / 100 != 2) {
+				LOG.errorf("Weatherhub portal answered HTTP %d for %s", response.statusCode(), uri);
+				return "";
+			}
 			return response.body();
-		} catch (Exception e) {
-			log.error(e);
+		} catch (IOException e) {
+			LOG.errorf(e, "Request to %s failed", uri);
+			return "";
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			LOG.errorf("Request to %s was interrupted", uri);
 			return "";
 		}
 	}
-	
-	private String requestSensorDataFromHistoryPage(String phoneId, String sensorId) {
-		HttpClient client = HttpClient.newHttpClient();
-		
-		Timestamp endOfToday = new Timestamp(getEndOfDay().getTime());
-		endOfToday.setNanos(0);
-		long timestampDifferenceFiveDaysAgo = 60 * 60 * 24 * 5 * 1000;
-		Timestamp timestampFiveDaysAgo = new Timestamp(endOfToday.getTime() - timestampDifferenceFiveDaysAgo);
-		
-		long timestampNowInSeconds = endOfToday.getTime() / 1000;
-		long timestampFiveDaysAgoInSeconds = timestampFiveDaysAgo.getTime() / 1000;
-		
-		String formattedDateFrom = sdf.format(timestampFiveDaysAgo);
-		String formattedDateTo = sdf.format(endOfToday);
-		
-		BodyPublisher body = BodyPublishers.ofString(
-				"deviceid=" + sensorId + "&vendorid=1af98e8c-2265-4887-b211-3c04623d27c7&appbundle=eu.mobile_alerts.weatherhub&fromepoch=" + timestampFiveDaysAgoInSeconds + "&toepoch=" + timestampNowInSeconds + "&from=" + formattedDateFrom + "+00%3A00&to=" + formattedDateTo + "+00%3A00&area=week");
-		HttpRequest request = HttpRequest.newBuilder(URI.create("https://measurements.mobile-alerts.eu/Home/MeasurementDetails"))
-				.header("accept", MediaType.TEXT_HTML)
-				.header("accept-encoding", "deflate, br")
-				.header("cache-control", "max-age=0")
-				.header("content-type", MediaType.APPLICATION_FORM_URLENCODED)
-				.header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36")
-				.header("cookie", "PhoneID=" + phoneId)
-				.POST(body)
-				.build();
-		try {
-			HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
-			return response.body();
-		} catch (Exception e) {
-			log.error(e);
-			return "";
-		}
+
+	private static String formEncode(Map<String, String> form) {
+		return form.entrySet().stream()
+				.map(e -> encode(e.getKey()) + "=" + encode(e.getValue()))
+				.collect(Collectors.joining("&"));
 	}
 
-	public SensorHistory getSensorHistoryDataWithGivenPhoneIdAndSensorId(String phoneId, String sensorId) {
-		String htmlBody = requestSensorDataFromHistoryPage(phoneId, sensorId);
-		SensorHistory history = new SensorHistory();
-		history.setId(sensorId);
-		return parser.parseSensorHistoryData(htmlBody, history);
-	}
-	
-	private Date getEndOfDay() {
-		Calendar calendar = Calendar.getInstance();
-		int year = calendar.get(Calendar.YEAR);
-		int month = calendar.get(Calendar.MONTH);
-		int day = calendar.get(Calendar.DATE);
-		calendar.set(year, month, day, 23, 59, 59);
-		calendar.add(Calendar.SECOND, +1);
-		return calendar.getTime();
+	private static String encode(String value) {
+		return URLEncoder.encode(value, StandardCharsets.UTF_8);
 	}
 }

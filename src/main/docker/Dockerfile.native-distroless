@@ -1,23 +1,19 @@
 ####
-# This Dockerfile is used in order to build a distroless container that runs the Quarkus application in native (no JVM) mode
+# Native (no JVM) image based on a distroless base. This is the image published to Docker Hub.
 #
-# Before building the container image run:
+# Build the native executable first (no local GraalVM needed, Docker is enough):
 #
-# ./mvnw package -Pnative
+#   ./mvnw package -Dnative -Dquarkus.native.container-build=true
 #
-# Then, build the image with:
+# Then build and run the image:
 #
-# docker build -f src/main/docker/Dockerfile.native-distroless -t quarkus/code-with-quarkus .
-#
-# Then run the container using:
-#
-# docker run -i --rm -p 8080:8080 quarkus/code-with-quarkus
-#
+#   docker build -f src/main/docker/Dockerfile.native-distroless -t weatherhub-proxy .
+#   docker run -i --rm -p 8080:8080 weatherhub-proxy
 ###
-FROM quay.io/quarkus/quarkus-distroless-image:1.0
+FROM quay.io/quarkus/quarkus-distroless-image:2.0
 COPY target/*-runner /application
 
 EXPOSE 8080
 USER nonroot
 
-CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
+ENTRYPOINT ["/application", "-Dquarkus.http.host=0.0.0.0"]
